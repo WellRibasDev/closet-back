@@ -26,7 +26,42 @@ function getSupabase(): SupabaseClient {
   if (!url || !key) {
     throw new Error("SUPABASE_URL e SUPABASE_SERVICE_KEY são obrigatórios");
   }
-  return createClient(url, key);
+  return createClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+}
+
+function getBucketName() {
+  return process.env.SUPABASE_BUCKET || "closet-fotos";
+}
+
+/** Garante que o bucket exista (cria público se faltar). */
+async function ensureBucket(supabase: SupabaseClient, bucket: string) {
+  const { data, error } = await supabase.storage.getBucket(bucket);
+  if (!error && data) return;
+
+  const { error: createError } = await supabase.storage.createBucket(bucket, {
+    public: true,
+    fileSizeLimit: MAX_BYTES,
+    allowedMimeTypes: Array.from(ALLOWED_MIME),
+  });
+
+  if (!createError) return;
+
+  const msg = (createError.message || "").toLowerCase();
+  // corrida / já existe
+  if (
+    msg.includes("already") ||
+    msg.includes("exists") ||
+    msg.includes("duplicate")
+  ) {
+    return;
+  }
+
+  throw new UploadError(
+    "BUCKET_NOT_FOUND",
+    `Bucket "${bucket}" não encontrado e não foi possível criar: ${createError.message}`
+  );
 }
 
 async function compressImage(
@@ -84,7 +119,9 @@ export async function uploadFoto(userId: string, file: File): Promise<string> {
 
   if (provider === "supabase") {
     const supabase = getSupabase();
-    const bucket = process.env.SUPABASE_BUCKET || "closet-fotos";
+    const bucket = getBucketName();
+    await ensureBucket(supabase, bucket);
+
     const { error } = await supabase.storage
       .from(bucket)
       .upload(pathname, compressed.buffer, {
@@ -93,7 +130,14 @@ export async function uploadFoto(userId: string, file: File): Promise<string> {
       });
 
     if (error) {
-      throw new UploadError("UPLOAD_FAILED", error.message);
+      const msg = error.message || "";
+      if (/bucket not found/i.test(msg)) {
+        throw new UploadError(
+          "BUCKET_NOT_FOUND",
+          `Bucket "${bucket}" não encontrado no Supabase Storage`
+        );
+      }
+      throw new UploadError("UPLOAD_FAILED", msg);
     }
 
     const { data } = supabase.storage.from(bucket).getPublicUrl(pathname);
@@ -127,7 +171,7 @@ export async function deleteFoto(
   try {
     if (provider === "supabase") {
       const supabase = getSupabase();
-      const bucket = process.env.SUPABASE_BUCKET || "closet-fotos";
+      const bucket = getBucketName();
       const path = extractSupabasePath(fotoUrl, bucket);
       if (!path) return;
       await supabase.storage.from(bucket).remove([path]);
