@@ -1,24 +1,26 @@
 # Closet Back — API REST
 
-Backend do app de guarda-roupa pessoal. Next.js (App Router) + Prisma + Postgres + JWT. Sem UI — apenas Route Handlers em `/api`.
+Backend do **Closet da Elisa** (guarda-roupa pessoal). Next.js (App Router) + Prisma + Postgres + JWT. Sem UI de produto — apenas Route Handlers em `/api`, consumidos pelo app Flutter.
+
+**Produção:** [https://closet-back.vercel.app](https://closet-back.vercel.app)  
+**Health:** `GET /api/health` → `{ "ok": true }`
 
 ## Stack
 
 - Next.js 14 (TypeScript, App Router)
-- Prisma + PostgreSQL (`DATABASE_URL`)
+- Prisma + PostgreSQL (`DATABASE_URL` + `DIRECT_URL` para migrations)
 - Zod (validação)
-- JWT com `jose`
-- Upload: Vercel Blob **ou** Supabase Storage (`STORAGE_PROVIDER`)
+- JWT com `jose` (HS256, 7 dias)
+- Upload: Supabase Storage **ou** Vercel Blob (`STORAGE_PROVIDER`)
+- sharp (compressão de fotos)
 
-## Exclusão de roupas
-
-`DELETE /api/roupas/:id` faz **hard delete**: remove o registro do banco e tenta apagar a foto no storage (se a URL for do provider configurado). Resposta: `{ "ok": true }`.
+Todas as rotas autenticadas filtram por `userId` do JWT (isolamento entre contas).
 
 ## Setup local
 
 ```bash
 cp .env.example .env
-# edite DATABASE_URL, JWT_SECRET e tokens de storage
+# edite DATABASE_URL, DIRECT_URL, JWT_SECRET e storage
 
 npm install
 npx prisma migrate dev
@@ -27,43 +29,42 @@ npm run prisma:seed   # opcional — teste@closet.app / senha123
 npm run dev           # http://localhost:3000
 ```
 
-### Postgres (Neon ou Supabase)
+### Postgres (Supabase ou Neon)
 
-1. Crie um projeto no [Neon](https://neon.tech) ou [Supabase](https://supabase.com).
-2. Copie a connection string para `DATABASE_URL` (use `?sslmode=require`).
-3. Rode `npx prisma migrate dev`.
+1. Crie o projeto e copie as connection strings.
+2. `DATABASE_URL` = pooler (runtime); `DIRECT_URL` = conexão direta (migrations).
+3. Use `?sslmode=require` e rode `npx prisma migrate dev`.
 
 ### Storage
 
-**Vercel Blob** (padrão):
+**Supabase Storage** (usado em produção):
+
+```
+STORAGE_PROVIDER=supabase
+SUPABASE_URL=https://xxxx.supabase.co
+SUPABASE_SERVICE_KEY=eyJ...
+SUPABASE_BUCKET=closet-fotos
+```
+
+Crie (ou deixe a API criar) um bucket público `closet-fotos`.
+
+**Vercel Blob** (alternativa):
 
 ```
 STORAGE_PROVIDER=vercel-blob
 BLOB_READ_WRITE_TOKEN=vercel_blob_rw_...
 ```
 
-**Supabase Storage**:
-
-```
-STORAGE_PROVIDER=supabase
-SUPABASE_URL=https://xxxx.supabase.co
-SUPABASE_SERVICE_KEY=eyJ...
-```
-
-Crie um bucket público `closet-fotos` (ou defina `SUPABASE_BUCKET`).
-
 ## Deploy na Vercel
 
-1. Importe o repositório `closet-back` na Vercel.
-2. Configure as env vars (mesmas do `.env.example`).
-3. Build command: `prisma generate && next build` (já no `npm run build`).
+1. Importe o repositório `closet-back` (ou conecte o GitHub App da Vercel).
+2. Configure as env vars (iguais ao `.env.example`, com valores reais).
+3. Build: `prisma generate && next build` (já no `npm run build`).
 4. Após o primeiro deploy, rode as migrations:
 
 ```bash
 npx prisma migrate deploy
 ```
-
-(ou use um script de release / GitHub Action).
 
 ## Endpoints
 
@@ -77,53 +78,63 @@ npx prisma migrate deploy
 | POST | `/api/roupas/:id/foto` | JWT |
 | GET/POST | `/api/desejos` | JWT |
 | GET/PUT/DELETE | `/api/desejos/:id` | JWT |
+| POST | `/api/desejos/:id/foto` | JWT |
 | POST | `/api/desejos/:id/mover` | JWT |
+
+### Roupas
+
+Campos: `nome`, `categoria`, `cor`, `tamanho`, `marca`, `observacao`, `fotoUrl`.
+
+`DELETE /api/roupas/:id` faz **hard delete** (remove do banco e tenta apagar a foto no storage).
+
+### Desejos (wishlist)
+
+Campos: `nome`, `categoria`, `cor`, `tamanho`, `marca`, `precoAlvo`, `linkRef`, `prioridade`, `observacao`, `fotoUrl`, `comprado`.
+
+- `POST /api/desejos/:id/foto` — upload multipart (campo `file`), igual às roupas.
+- `POST /api/desejos/:id/mover` — cria uma `Roupa` a partir do desejo (copia foto/campos) e marca o desejo como comprado.
 
 ## Exemplos curl
 
 ```bash
 # Health
-curl -s http://localhost:3000/api/health
+curl -s https://closet-back.vercel.app/api/health
 
 # Registrar
-curl -s -X POST http://localhost:3000/api/auth/register \
+curl -s -X POST https://closet-back.vercel.app/api/auth/register \
   -H 'Content-Type: application/json' \
   -d '{"nome":"Ana","email":"ana@email.com","senha":"senha123"}'
 
 # Login
-TOKEN=$(curl -s -X POST http://localhost:3000/api/auth/login \
+TOKEN=$(curl -s -X POST https://closet-back.vercel.app/api/auth/login \
   -H 'Content-Type: application/json' \
   -d '{"email":"ana@email.com","senha":"senha123"}' | jq -r .token)
 
 # Sem token → 401
-curl -s -o /dev/null -w "%{http_code}\n" http://localhost:3000/api/roupas
+curl -s -o /dev/null -w "%{http_code}\n" https://closet-back.vercel.app/api/roupas
 
-# Criar roupa
-curl -s -X POST http://localhost:3000/api/roupas \
+# Criar desejo
+curl -s -X POST https://closet-back.vercel.app/api/desejos \
   -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' \
-  -d '{"nome":"Jaqueta jeans","categoria":"Jaqueta","cor":"Azul","tamanho":"M"}'
+  -d '{"nome":"Blazer preto","categoria":"Jaqueta","cor":"Preto","tamanho":"M","prioridade":2}'
 
-# Listar
-curl -s "http://localhost:3000/api/roupas?page=1&limit=20" \
-  -H "Authorization: Bearer $TOKEN"
-
-# Upload de foto (campo file)
-curl -s -X POST http://localhost:3000/api/roupas/ROUPA_ID/foto \
+# Upload de foto do desejo
+curl -s -X POST https://closet-back.vercel.app/api/desejos/DESEJO_ID/foto \
   -H "Authorization: Bearer $TOKEN" \
   -F "file=@./foto.jpg"
 
-# Wishlist + mover para closet
-curl -s -X POST http://localhost:3000/api/desejos \
-  -H "Authorization: Bearer $TOKEN" \
-  -H 'Content-Type: application/json' \
-  -d '{"nome":"Blazer preto","categoria":"Jaqueta","prioridade":2}'
-
-curl -s -X POST http://localhost:3000/api/desejos/DESEJO_ID/mover \
+# Mover desejo → closet
+curl -s -X POST https://closet-back.vercel.app/api/desejos/DESEJO_ID/mover \
   -H "Authorization: Bearer $TOKEN"
 ```
 
 ## CORS
 
-Em desenvolvimento, `ALLOWED_ORIGINS=*` libera qualquer origem (Flutter mobile não tem origin fixa). Em produção, liste origens conhecidas separadas por vírgula se necessário.
-# closet-back
+`ALLOWED_ORIGINS=*` libera qualquer origem (útil para app mobile). Em produção restrita, liste origens separadas por vírgula.
+
+## Segurança
+
+- Não commite `.env` (só `.env.example` com placeholders).
+- `SUPABASE_SERVICE_KEY`, `JWT_SECRET` e `DATABASE_URL` ficam só na Vercel / máquina local.
+- Repo público não expõe essas chaves, mas a API continua acessível na internet — a proteção é o JWT + filtro por `userId`.
