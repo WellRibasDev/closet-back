@@ -12,7 +12,7 @@ type Params = { params: { id: string } };
 
 /**
  * Cria uma Roupa a partir do Desejo e marca comprado=true.
- * Copia: nome, categoria, fotoUrl, observacao.
+ * Copia: nome, categoria, cor, tamanho, marca, fotoUrl, observacao.
  */
 export async function POST(request: NextRequest, { params }: Params) {
   try {
@@ -48,6 +48,9 @@ export async function POST(request: NextRequest, { params }: Params) {
         data: {
           nome: desejo.nome,
           categoria,
+          cor: desejo.cor,
+          tamanho: desejo.tamanho,
+          marca: desejo.marca,
           fotoUrl: desejo.fotoUrl,
           observacao: desejo.observacao,
           userId,

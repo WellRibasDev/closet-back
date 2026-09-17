@@ -39,6 +39,9 @@ model Desejo {
   id         String   @id @default(cuid())
   nome       String
   categoria  String?
+  cor        String?
+  tamanho    String?
+  marca      String?
   precoAlvo  Float?
   linkRef    String?
   prioridade Int      @default(0)

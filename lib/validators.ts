@@ -24,6 +24,9 @@ export const createRoupaSchema = z.object({
 export const createDesejoSchema = z.object({
   nome: z.string().trim().min(2).max(120),
   categoria: z.string().trim().min(1).max(60),
+  cor: z.string().trim().max(60).optional().nullable(),
+  tamanho: z.string().trim().max(30).optional().nullable(),
+  marca: z.string().trim().max(80).optional().nullable(),
   precoAlvo: z.number().nonnegative().optional().nullable(),
   linkRef: z.string().url().optional().nullable(),
   prioridade: z.number().int().min(0).max(2).optional().default(0),
@@ -36,6 +39,9 @@ export const updateDesejoSchema = z
   .object({
     nome: z.string().trim().min(2).max(120).optional(),
     categoria: z.string().trim().min(1).max(60).optional().nullable(),
+    cor: z.string().trim().max(60).optional().nullable(),
+    tamanho: z.string().trim().max(30).optional().nullable(),
+    marca: z.string().trim().max(80).optional().nullable(),
     precoAlvo: z.number().nonnegative().optional().nullable(),
     linkRef: z.string().url().optional().nullable(),
     prioridade: z.number().int().min(0).max(2).optional(),
