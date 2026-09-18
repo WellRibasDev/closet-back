@@ -70,12 +70,14 @@ export function publicUser(user: {
   id: string;
   email: string;
   nome: string | null;
+  fotoUrl?: string | null;
   createdAt: Date;
 }) {
   return {
     id: user.id,
     email: user.email,
     nome: user.nome,
+    fotoUrl: user.fotoUrl ?? null,
     createdAt: user.createdAt,
   };
 }
