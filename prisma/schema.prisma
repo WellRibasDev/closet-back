@@ -13,6 +13,7 @@ model User {
   email     String   @unique
   senhaHash String
   nome      String?
+  fotoUrl   String?
   roupas    Roupa[]
   desejos   Desejo[]
   createdAt DateTime @default(now())

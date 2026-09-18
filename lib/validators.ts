@@ -11,6 +11,21 @@ export const loginSchema = z.object({
   senha: z.string().min(1).max(128),
 });
 
+export const updateMeSchema = z
+  .object({
+    nome: z.string().trim().min(1).max(120).optional().nullable(),
+    email: z.string().trim().email().max(255).optional(),
+    senhaAtual: z.string().min(1).max(128).optional(),
+    novaSenha: z.string().min(6).max(128).optional(),
+  })
+  .refine(
+    (data) =>
+      data.nome !== undefined ||
+      data.email !== undefined ||
+      data.novaSenha !== undefined,
+    { message: "Informe ao menos um campo para atualizar" }
+  );
+
 export const createRoupaSchema = z.object({
   nome: z.string().trim().min(2).max(120),
   categoria: z.string().trim().min(1).max(60),
